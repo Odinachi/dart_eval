@@ -288,5 +288,84 @@ void main() {
       final result = runtime.executeLib('package:example/main.dart', 'main');
       expect(result, 16);
     });
+
+    test('Correct tree shaking of long reference chains within a single file',
+        () {
+      final program = compiler.compile({
+        'example': {
+          'main.dart': '''
+            import 'package:example/file.dart';
+            int main() {
+              return getClass().number();
+            }
+          ''',
+          'file.dart': '''
+            Cls getClass() {
+              return getClass2();
+            }
+
+            Cls getClass2() {
+              return getClass3();
+            }
+
+            Cls getClass3() {
+              return getClass4();
+            }
+
+            Cls getClass4() {
+              return Cls();
+            }
+
+            class Cls {
+              int number() {
+                return 42;
+              }
+            }
+          ''',
+        }
+      });
+
+      final runtime = Runtime.ofProgram(program);
+      final result = runtime.executeLib('package:example/main.dart', 'main');
+      expect(result, 42);
+    });
+
+    test("Tree shaking doesn't hide top level declarations", () {
+      final program = compiler.compile({
+        'example': {
+          'main.dart': '''
+            import 'package:example/file.dart';
+            int main() {
+              return getNumber();
+            }
+          ''',
+          'file.dart': '''
+            import 'package:example/meta.dart';
+            int getNumber() {
+              return number;
+            }
+            
+            @internal
+            int get number {
+              return 42;
+            }
+          ''',
+          'meta.dart': '''
+            const _Internal internal = _Internal();
+            class _Internal {
+              const _Internal();
+            }
+            const _MustCallSuper mustCallSuper = _MustCallSuper();
+            class _MustCallSuper {
+              const _MustCallSuper();
+            }
+          ''',
+        }
+      });
+
+      final runtime = Runtime.ofProgram(program);
+      final result = runtime.executeLib('package:example/main.dart', 'main');
+      expect(result, 42);
+    });
   });
 }

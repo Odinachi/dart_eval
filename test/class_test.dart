@@ -535,7 +535,7 @@ void main() {
       }, prints(startsWith('hashCode ')));
     });
 
-/*    test('Super parameter multi-level indirection', () {
+    test('Super parameter multi-level indirection', () {
       final runtime = compiler.compileWriteAndLoad({
         'example': {
           'main.dart': '''
@@ -563,6 +563,62 @@ void main() {
       expect(() {
         runtime.executeLib('package:example/main.dart', 'main');
       }, prints('GET\nhttp://example.com\n'));
-    });*/
+    });
+
+    test('Extending prefixed class', () {
+      final runtime = compiler.compileWriteAndLoad({
+        'example': {
+          'main.dart': '''
+            import 'package:example/b1.dart' as b1;
+
+            class ClassC extends b1.ClassB {
+              @override
+              int number() => 6;
+            }
+
+            int main() {
+              final b = b1.ClassB();
+              final c = ClassC();
+
+              return b.number() + c.number();
+            }
+          ''',
+          'b1.dart': '''
+            class ClassB {
+              ClassB();
+              int number() => 4;
+            }
+          ''',
+        }
+      });
+
+      expect(runtime.executeLib('package:example/main.dart', 'main'), 10);
+    });
+
+    test('Assigning to default null field', () {
+      final program = compiler.compile({
+        'example': {
+          'main.dart': '''
+            class TestClass {
+              int? value = null;
+
+              void update() {
+                value = 42;
+              }
+            }
+            
+            int main() {
+              final testClass = TestClass();
+              testClass.update();
+              return testClass.value!;
+            }
+          '''
+        }
+      });
+
+      final runtime = Runtime.ofProgram(program);
+      final result = runtime.executeLib('package:example/main.dart', 'main');
+      expect(result, 42);
+    });
   });
 }

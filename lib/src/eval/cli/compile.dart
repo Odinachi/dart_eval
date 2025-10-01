@@ -8,7 +8,8 @@ import 'package:path/path.dart';
 import 'package:pubspec_parse/pubspec_parse.dart';
 
 void cliCompile(String outputName) {
-  final compiler = Compiler();
+  final compiler = Compiler()
+    ..diagnosticMode = DiagnosticMode.throwErrorPrintAll;
 
   print('Loading files...');
   var commandRoot = Directory(current);
@@ -26,8 +27,8 @@ void cliCompile(String outputName) {
     for (final file in files) {
       print(
           'Found binding file: ${relative(file.path, from: projectRoot.path)}');
-      final _data = file.readAsStringSync();
-      final decoded = (json.decode(_data) as Map).cast<String, dynamic>();
+      final data0 = file.readAsStringSync();
+      final decoded = (json.decode(data0) as Map).cast<String, dynamic>();
       final classList = (decoded['classes'] as List);
       for (final $class in classList.cast<Map>()) {
         compiler.defineBridgeClass(BridgeClassDef.fromJson($class.cast()));
@@ -74,11 +75,11 @@ void cliCompile(String outputName) {
     }
     for (final file in dir.listSync()) {
       if (file is File && file.path.endsWith('.dart')) {
-        final _data = file.readAsStringSync();
-        sourceLength += _data.length;
+        final fileData = file.readAsStringSync();
+        sourceLength += fileData.length;
 
         final p = relative(file.path, from: root).replaceAll('\\', '/');
-        data[pkg]![p] = _data;
+        data[pkg]![p] = fileData;
       } else if (file is Directory) {
         addFiles(pkg, file, root);
       }
@@ -125,11 +126,11 @@ void cliCompile(String outputName) {
 
   final programSource = compiler.compile(data);
 
-  final _out = programSource.write();
+  final out = programSource.write();
 
-  File(outputName).writeAsBytesSync(_out);
+  File(outputName).writeAsBytesSync(out);
 
   final timeElapsed = DateTime.now().millisecondsSinceEpoch - ts;
   print(
-      'Compiled $sourceLength characters Dart to ${_out.length} bytes EVC in $timeElapsed ms: $outputName');
+      'Compiled $sourceLength characters Dart to ${out.length} bytes EVC in $timeElapsed ms: $outputName');
 }

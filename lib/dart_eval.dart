@@ -7,3 +7,4 @@ export 'src/eval/compiler/compiler.dart';
 export 'src/eval/compiler/program.dart';
 export 'src/eval/compiler/errors.dart' hide NotReferencableError;
 export 'src/eval/runtime/override.dart' hide runtimeOverride;
+export 'src/eval/compiler/model/diagnostic_mode.dart';

@@ -1,5 +1,6 @@
 import 'package:analyzer/dart/ast/ast.dart';
 import 'package:dart_eval/dart_eval_bridge.dart';
+import 'package:dart_eval/src/eval/bridge/declaration.dart';
 import 'package:dart_eval/src/eval/compiler/builtins.dart';
 import 'package:dart_eval/src/eval/compiler/context.dart';
 import 'package:dart_eval/src/eval/compiler/errors.dart';
@@ -80,24 +81,24 @@ void compileConstructorDeclaration(
     final p = param.parameter;
     final V = param.V;
     Variable vrep;
-    if ($redirectingInitializer != null && !(p is SimpleFormalParameter)) {
+    if ($redirectingInitializer != null && p is! SimpleFormalParameter) {
       throw CompileError(
           'Redirecting constructor invocation cannot have super or this parameters',
           d);
     }
     if (p is FieldFormalParameter) {
-      TypeRef? _type;
+      TypeRef? type0;
       if (p.type != null) {
-        _type = TypeRef.fromAnnotation(ctx, ctx.library, p.type!);
+        type0 = TypeRef.fromAnnotation(ctx, ctx.library, p.type!);
       }
-      _type ??= TypeRef.lookupFieldType(ctx,
+      type0 ??= TypeRef.lookupFieldType(ctx,
           TypeRef.lookupDeclaration(ctx, ctx.library, parent), p.name.lexeme,
           source: p);
-      _type ??= V?.type;
-      _type ??= CoreTypes.dynamic.ref(ctx);
+      type0 ??= V?.type;
+      type0 ??= CoreTypes.dynamic.ref(ctx);
 
       vrep = Variable(i,
-              _type.copyWith(boxed: !_type.isUnboxedAcrossFunctionBoundaries))
+              type0.copyWith(boxed: !type0.isUnboxedAcrossFunctionBoundaries))
           .boxIfNeeded(ctx)
         ..name = p.name.lexeme;
 
@@ -163,8 +164,8 @@ void compileConstructorDeclaration(
   // Handle redirecting constructor
   if ($redirectingInitializer != null) {
     final name = $redirectingInitializer.constructorName?.name ?? '';
-    final _dec = resolveStaticMethod(ctx, clsType, name);
-    final dec = _dec.declaration!;
+    final dec0 = resolveStaticMethod(ctx, clsType, name);
+    final dec = dec0.declaration!;
     final fpl = (dec as ConstructorDeclaration).parameters.parameters;
 
     compileArgumentList(
@@ -188,6 +189,7 @@ void compileConstructorDeclaration(
       : (parent as ClassDeclaration).extendsClause;
   Variable $super;
   DeclarationOrPrefix? extendsWhat;
+  DeclarationOrBridge? extendsDecl;
 
   final argTypes = <TypeRef?>[];
   final namedArgTypes = <String, TypeRef?>{};
@@ -197,44 +199,65 @@ void compileConstructorDeclaration(
   if ($extends == null) {
     $super = BuiltinValue().push(ctx);
   } else {
-    extendsWhat = ctx
-        .visibleDeclarations[ctx.library]![$extends.superclass.name2.lexeme]!;
+    final prefix = $extends.superclass.importPrefix;
+    final clsName = $extends.superclass.name2.lexeme;
+    extendsWhat = (prefix != null
+            ? ctx.visibleDeclarations[ctx.library]![prefix.name.value()]
+            : ctx.visibleDeclarations[ctx.library]![clsName]) ??
+        (throw CompileError('Cannot find superclass $clsName', $extends));
 
-    final decl = extendsWhat.declaration!;
+    extendsDecl = extendsWhat.declaration ??
+        extendsWhat.children?[clsName] ??
+        (throw CompileError('Cannot find superclass $clsName', $extends));
 
-    if (decl.isBridge) {
+    if (extendsDecl.isBridge) {
       ctx.pushOp(PushBridgeSuperShim.make(), PushBridgeSuperShim.length);
       $super = Variable.alloc(ctx, CoreTypes.dynamic.ref(ctx));
     } else {
       final extendsType = TypeRef.lookupDeclaration(
-          ctx, ctx.library, decl.declaration as ClassDeclaration);
+          ctx, ctx.library, extendsDecl.declaration as ClassDeclaration,
+          prefix: prefix?.name.lexeme);
 
       AlwaysReturnType? mReturnType;
 
       if ($superInitializer != null) {
-        final _constructor = ctx.topLevelDeclarationsMap[decl.sourceLib]![
-            '${extendsType.name}.$constructorName']!;
-        final constructor = _constructor.declaration as ConstructorDeclaration;
+        final constructor0 = ctx.topLevelDeclarationsMap[
+            extendsDecl.sourceLib]!['${extendsType.name}.$constructorName']!;
+        final constructor = constructor0.declaration as ConstructorDeclaration;
 
         final argsPair = compileArgumentList(
             ctx,
             $superInitializer.argumentList,
-            decl.sourceLib,
+            extendsDecl.sourceLib,
             constructor.parameters.parameters,
             constructor,
             superParams: superParams,
             source: $superInitializer);
-        final _args = argsPair.first;
-        final _namedArgs = argsPair.second;
+        final args = argsPair.first;
+        final namedArgs = argsPair.second;
 
-        argTypes.addAll(_args.map((e) => e.type).toList());
+        argTypes.addAll(args.map((e) => e.type).toList());
         namedArgTypes
-            .addAll(_namedArgs.map((key, value) => MapEntry(key, value.type)));
+            .addAll(namedArgs.map((key, value) => MapEntry(key, value.type)));
+      } else if (superParams.isNotEmpty) {
+        // If there are super parameters, compile without an argument list
+        final constructor0 = ctx.topLevelDeclarationsMap[
+            extendsDecl.sourceLib]!['${extendsType.name}.$constructorName']!;
+        final constructor = constructor0.declaration as ConstructorDeclaration;
+        final argsPair = compileSuperParams(
+            ctx, constructor.parameters.parameters, constructor,
+            superParams: superParams, source: $superInitializer);
+        final args = argsPair.first;
+        final namedArgs = argsPair.second;
+
+        argTypes.addAll(args.map((e) => e.type).toList());
+        namedArgTypes
+            .addAll(namedArgs.map((key, value) => MapEntry(key, value.type)));
       }
 
-      final method =
-          IdentifierReference(null, '${extendsType.name}.$constructorName')
-              .getValue(ctx);
+      final method = IdentifierReference(null,
+              '${prefix != null ? '${prefix.name.value()}.' : ''}${extendsType.name}.$constructorName')
+          .getValue(ctx);
       if (method.methodOffset == null) {
         throw CompileError(
             'Cannot call $constructorName as it is not a valid method');
@@ -262,19 +285,7 @@ void compileConstructorDeclaration(
   final instOffset = ctx.scopeFrameOffset++;
 
   if (parent is EnumDeclaration) {
-    /// Add implicit index and name fields
-    ctx.inferredFieldTypes
-        .putIfAbsent(ctx.library, () => {})
-        .putIfAbsent(ctx.currentClass!.name.lexeme, () => {})
-      ..['index'] = CoreTypes.int.ref(ctx)
-      ..['name'] = CoreTypes.string.ref(ctx);
-  }
-
-  if (parent is EnumDeclaration) {
-    ctx.pushOp(SetObjectPropertyImpl.make(instOffset, 0, 0),
-        SetObjectPropertyImpl.length);
-    ctx.pushOp(SetObjectPropertyImpl.make(instOffset, 1, 1),
-        SetObjectPropertyImpl.length);
+    _setupEnum(ctx, parent, instOffset);
   }
 
   for (final fieldFormal in fieldFormalNames) {
@@ -307,7 +318,7 @@ void compileConstructorDeclaration(
   _compileUnusedFields(ctx, fields, {}, instOffset);
 
   final body = d.body;
-  if (d.factoryKeyword == null && !(body is EmptyFunctionBody)) {
+  if (d.factoryKeyword == null && body is! EmptyFunctionBody) {
     ctx.beginAllocScope();
     ctx.setLocal('#this', Variable(instOffset, TypeRef.$this(ctx)!));
     if (body is BlockFunctionBody) {
@@ -321,9 +332,8 @@ void compileConstructorDeclaration(
     ctx.endAllocScope();
   }
 
-  if ($extends != null && extendsWhat!.declaration!.isBridge) {
-    final decl = extendsWhat.declaration!;
-    final bridge = decl.bridge! as BridgeClassDef;
+  if ($extends != null && extendsDecl!.isBridge) {
+    final bridge = extendsDecl.bridge! as BridgeClassDef;
 
     if (!bridge.bridge) {
       throw CompileError(
@@ -334,16 +344,26 @@ void compileConstructorDeclaration(
       final constructor = bridge.constructors[constructorName]!;
       final argsPair = compileArgumentListWithBridge(
           ctx, $superInitializer.argumentList, constructor.functionDescriptor);
-      final _args = argsPair.first;
-      final _namedArgs = argsPair.second;
-      argTypes.addAll(_args.map((e) => e.type).toList());
+      final args = argsPair.first;
+      final namedArgs = argsPair.second;
+      argTypes.addAll(args.map((e) => e.type).toList());
       namedArgTypes
-          .addAll(_namedArgs.map((key, value) => MapEntry(key, value.type)));
+          .addAll(namedArgs.map((key, value) => MapEntry(key, value.type)));
+    } else if (superParams.isNotEmpty) {
+      final constructor = bridge.constructors[constructorName]!;
+      final argsPair = compileSuperParamsWithBridge(
+          ctx, constructor.functionDescriptor,
+          superParams: superParams);
+      final args = argsPair.first;
+      final namedArgs = argsPair.second;
+      argTypes.addAll(args.map((e) => e.type).toList());
+      namedArgTypes
+          .addAll(namedArgs.map((key, value) => MapEntry(key, value.type)));
     }
 
     final op = BridgeInstantiate.make(
         instOffset,
-        ctx.bridgeStaticFunctionIndices[decl.sourceLib]![
+        ctx.bridgeStaticFunctionIndices[extendsDecl.sourceLib]![
             '${$extends.superclass.name2.value()}.$constructorName']!);
     ctx.pushOp(op, BridgeInstantiate.len(op));
     final bridgeInst = Variable.alloc(ctx, CoreTypes.dynamic.ref(ctx));
@@ -381,6 +401,7 @@ void compileDefaultConstructor(CompilerContext ctx,
       : (parent as ClassDeclaration).extendsClause;
   Variable $super;
   DeclarationOrPrefix? extendsWhat;
+  DeclarationOrBridge? extendsDecl;
 
   final argTypes = <TypeRef?>[];
   final namedArgTypes = <String, TypeRef?>{};
@@ -390,23 +411,30 @@ void compileDefaultConstructor(CompilerContext ctx,
   if ($extends == null) {
     $super = BuiltinValue().push(ctx);
   } else {
-    extendsWhat = ctx
-        .visibleDeclarations[ctx.library]![$extends.superclass.name2.lexeme]!;
+    final prefix = $extends.superclass.importPrefix;
+    final clsName = $extends.superclass.name2.lexeme;
+    extendsWhat = (prefix != null
+            ? ctx.visibleDeclarations[ctx.library]![prefix.name.value()]
+            : ctx.visibleDeclarations[ctx.library]![clsName]) ??
+        (throw CompileError('Cannot find superclass $clsName', $extends));
 
-    final decl = extendsWhat.declaration!;
+    extendsDecl = extendsWhat.declaration ??
+        extendsWhat.children?[clsName] ??
+        (throw CompileError('Cannot find superclass $clsName', $extends));
 
-    if (decl.isBridge) {
+    if (extendsDecl.isBridge) {
       ctx.pushOp(PushBridgeSuperShim.make(), PushBridgeSuperShim.length);
       $super = Variable.alloc(ctx, CoreTypes.dynamic.ref(ctx));
     } else {
       final extendsType = TypeRef.lookupDeclaration(
-          ctx, ctx.library, decl.declaration as ClassDeclaration);
+          ctx, ctx.library, extendsDecl.declaration as ClassDeclaration,
+          prefix: prefix?.name.lexeme);
 
       AlwaysReturnType? mReturnType;
 
-      final method =
-          IdentifierReference(null, '${extendsType.name}.$constructorName')
-              .getValue(ctx);
+      final method = IdentifierReference(null,
+              '${prefix != null ? '${prefix.name.value()}.' : ''}${extendsType.name}.$constructorName')
+          .getValue(ctx);
       if (method.methodOffset == null) {
         throw CompileError(
             'Cannot call $constructorName as it is not a valid method');
@@ -434,19 +462,7 @@ void compileDefaultConstructor(CompilerContext ctx,
   final instOffset = ctx.scopeFrameOffset++;
 
   if (parent is EnumDeclaration) {
-    /// Add implicit index and name fields
-    ctx.inferredFieldTypes
-        .putIfAbsent(ctx.library, () => {})
-        .putIfAbsent(ctx.currentClass!.name.lexeme, () => {})
-      ..['index'] = CoreTypes.int.ref(ctx)
-      ..['name'] = CoreTypes.string.ref(ctx);
-  }
-
-  if (parent is EnumDeclaration) {
-    ctx.pushOp(SetObjectPropertyImpl.make(instOffset, 0, 0),
-        SetObjectPropertyImpl.length);
-    ctx.pushOp(SetObjectPropertyImpl.make(instOffset, 1, 1),
-        SetObjectPropertyImpl.length);
+    _setupEnum(ctx, parent, instOffset);
   }
 
   _compileUnusedFields(
@@ -456,9 +472,8 @@ void compileDefaultConstructor(CompilerContext ctx,
       instOffset,
       parent is EnumDeclaration ? 2 : 0);
 
-  if ($extends != null && extendsWhat!.declaration!.isBridge) {
-    final decl = extendsWhat.declaration!;
-    final bridge = decl.bridge! as BridgeClassDef;
+  if ($extends != null && extendsDecl!.isBridge) {
+    final bridge = extendsDecl.bridge! as BridgeClassDef;
 
     if (!bridge.bridge) {
       throw CompileError(
@@ -467,7 +482,7 @@ void compileDefaultConstructor(CompilerContext ctx,
 
     final op = BridgeInstantiate.make(
         instOffset,
-        ctx.bridgeStaticFunctionIndices[decl.sourceLib]![
+        ctx.bridgeStaticFunctionIndices[extendsDecl.sourceLib]![
             '${$extends.superclass.name2.lexeme}.$constructorName']!);
     ctx.pushOp(op, BridgeInstantiate.len(op));
     final bridgeInst = Variable.alloc(ctx, CoreTypes.dynamic.ref(ctx));
@@ -488,11 +503,11 @@ void compileDefaultConstructor(CompilerContext ctx,
 Map<String, int> _getFieldIndices(List<FieldDeclaration> fields,
     [int fieldIdx = 0]) {
   final fieldIndices = <String, int>{};
-  var _fieldIdx = fieldIdx;
+  var fieldIdx0 = fieldIdx;
   for (final fd in fields) {
     for (final field in fd.fields.variables) {
-      fieldIndices[field.name.lexeme] = _fieldIdx;
-      _fieldIdx++;
+      fieldIndices[field.name.lexeme] = fieldIdx0;
+      fieldIdx0++;
     }
   }
   return fieldIndices;
@@ -501,7 +516,7 @@ Map<String, int> _getFieldIndices(List<FieldDeclaration> fields,
 void _compileUnusedFields(CompilerContext ctx, List<FieldDeclaration> fields,
     Set<String> usedNames, int instOffset,
     [int fieldIdx = 0]) {
-  var _fieldIdx = fieldIdx;
+  var fieldIdx0 = fieldIdx;
   for (final fd in fields) {
     for (final field in fd.fields.variables) {
       if (!usedNames.contains(field.name.lexeme) && field.initializer != null) {
@@ -511,10 +526,24 @@ void _compileUnusedFields(CompilerContext ctx, List<FieldDeclaration> fields,
             V.type;
         ctx.pushOp(
             SetObjectPropertyImpl.make(
-                instOffset, _fieldIdx, V.scopeFrameOffset),
+                instOffset, fieldIdx0, V.scopeFrameOffset),
             SetObjectPropertyImpl.length);
       }
-      _fieldIdx++;
+      fieldIdx0++;
     }
   }
+}
+
+void _setupEnum(CompilerContext ctx, EnumDeclaration parent, int instOffset) {
+  /// Add implicit index and name fields
+  ctx.inferredFieldTypes
+      .putIfAbsent(ctx.library, () => {})
+      .putIfAbsent(ctx.currentClass!.name.lexeme, () => {})
+    ..['index'] = CoreTypes.int.ref(ctx)
+    ..['name'] = CoreTypes.string.ref(ctx);
+
+  ctx.pushOp(SetObjectPropertyImpl.make(instOffset, 0, 0),
+      SetObjectPropertyImpl.length);
+  ctx.pushOp(SetObjectPropertyImpl.make(instOffset, 1, 1),
+      SetObjectPropertyImpl.length);
 }

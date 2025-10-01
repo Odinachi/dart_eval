@@ -46,9 +46,21 @@ class $num<T extends num> implements $Instance {
                     nullable: true),
                 params: []),
             isStatic: false),
+        'toDouble': BridgeMethodDef(
+            BridgeFunctionDef(
+                returns: BridgeTypeAnnotation(BridgeTypeRef(CoreTypes.double),
+                    nullable: true),
+                params: []),
+            isStatic: false),
         'ceil': BridgeMethodDef(
             BridgeFunctionDef(
                 returns: BridgeTypeAnnotation(BridgeTypeRef(CoreTypes.int),
+                    nullable: true),
+                params: []),
+            isStatic: false),
+        'abs': BridgeMethodDef(
+            BridgeFunctionDef(
+                returns: BridgeTypeAnnotation(BridgeTypeRef(CoreTypes.num),
                     nullable: true),
                 params: []),
             isStatic: false),
@@ -129,8 +141,12 @@ class $num<T extends num> implements $Instance {
         return __compareTo;
       case 'toInt':
         return __toInt;
+      case 'toDouble':
+        return __toDouble;
       case 'ceil':
         return __ceil;
+      case 'abs':
+        return __abs;
     }
     return _superclass.$getProperty(runtime, identifier);
   }
@@ -148,14 +164,14 @@ class $num<T extends num> implements $Instance {
   static const $Function __plus = $Function(_plus);
   static $Value? _plus(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value + other!.$value;
+    final evalResult = target!.$value + other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
-    if (_evalResult is double) {
-      return $double(_evalResult);
+    if (evalResult is double) {
+      return $double(evalResult);
     }
 
     throw UnimplementedError();
@@ -164,14 +180,14 @@ class $num<T extends num> implements $Instance {
   static const $Function __minus = $Function(_minus);
   static $Value? _minus(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value - other!.$value;
+    final evalResult = target!.$value - other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
-    if (_evalResult is double) {
-      return $double(_evalResult);
+    if (evalResult is double) {
+      return $double(evalResult);
     }
 
     throw UnimplementedError();
@@ -180,14 +196,14 @@ class $num<T extends num> implements $Instance {
   static const $Function __mul = $Function(_mul);
   static $Value? _mul(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value * other!.$value;
+    final evalResult = target!.$value * other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
-    if (_evalResult is double) {
-      return $double(_evalResult);
+    if (evalResult is double) {
+      return $double(evalResult);
     }
 
     throw UnimplementedError();
@@ -196,10 +212,10 @@ class $num<T extends num> implements $Instance {
   static const $Function __div = $Function(_div);
   static $Value? _div(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value / other!.$value;
+    final evalResult = target!.$value / other!.$value;
 
-    if (_evalResult is double) {
-      return $double(_evalResult);
+    if (evalResult is double) {
+      return $double(evalResult);
     }
 
     throw UnimplementedError();
@@ -209,14 +225,14 @@ class $num<T extends num> implements $Instance {
 
   static $Value? _mod(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value % other!.$value;
+    final evalResult = target!.$value % other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
-    if (_evalResult is double) {
-      return $double(_evalResult);
+    if (evalResult is double) {
+      return $double(evalResult);
     }
 
     throw UnimplementedError();
@@ -225,10 +241,10 @@ class $num<T extends num> implements $Instance {
   static const $Function __lt = $Function(_lt);
   static $Value? _lt(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value < other!.$value;
+    final evalResult = target!.$value < other!.$value;
 
-    if (_evalResult is bool) {
-      return $bool(_evalResult);
+    if (evalResult is bool) {
+      return $bool(evalResult);
     }
 
     throw UnimplementedError();
@@ -237,10 +253,10 @@ class $num<T extends num> implements $Instance {
   static const $Function __gt = $Function(_gt);
   static $Value? _gt(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value > other!.$value;
+    final evalResult = target!.$value > other!.$value;
 
-    if (_evalResult is bool) {
-      return $bool(_evalResult);
+    if (evalResult is bool) {
+      return $bool(evalResult);
     }
 
     throw UnimplementedError();
@@ -249,10 +265,10 @@ class $num<T extends num> implements $Instance {
   static const $Function __lteq = $Function(_lteq);
   static $Value? _lteq(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value <= other!.$value;
+    final evalResult = target!.$value <= other!.$value;
 
-    if (_evalResult is bool) {
-      return $bool(_evalResult);
+    if (evalResult is bool) {
+      return $bool(evalResult);
     }
 
     throw UnimplementedError();
@@ -261,10 +277,10 @@ class $num<T extends num> implements $Instance {
   static const $Function __gteq = $Function(_gteq);
   static $Value? _gteq(Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value >= other!.$value;
+    final evalResult = target!.$value >= other!.$value;
 
-    if (_evalResult is bool) {
-      return $bool(_evalResult);
+    if (evalResult is bool) {
+      return $bool(evalResult);
     }
 
     throw UnimplementedError();
@@ -272,23 +288,36 @@ class $num<T extends num> implements $Instance {
 
   static const $Function __toInt = $Function(_toInt);
   static $Value? _toInt(Runtime runtime, $Value? target, List<$Value?> args) {
-    final _evalResult = (target!.$value as num).toInt();
-    return $int(_evalResult);
+    final evalResult = (target!.$value as num).toInt();
+    return $int(evalResult);
+  }
+
+  static const $Function __toDouble = $Function(_toDouble);
+  static $Value? _toDouble(
+      Runtime runtime, $Value? target, List<$Value?> args) {
+    final evalResult = (target!.$value as num).toDouble();
+    return $double(evalResult);
+  }
+
+  static const $Function __abs = $Function(_abs);
+  static $Value? _abs(Runtime runtime, $Value? target, List<$Value?> args) {
+    final evalResult = (target!.$value as num).abs();
+    return $num(evalResult);
   }
 
   static const $Function __ceil = $Function(_ceil);
   static $Value? _ceil(Runtime runtime, $Value? target, List<$Value?> args) {
-    final _evalResult = (target!.$value as num).ceil();
-    return $int(_evalResult);
+    final evalResult = (target!.$value as num).ceil();
+    return $int(evalResult);
   }
 
   static const $Function __compareTo = $Function(_compareTo);
   static $Value? _compareTo(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value.compareTo(other!.$value);
+    final evalResult = target!.$value.compareTo(other!.$value);
 
-    return $int(_evalResult);
+    return $int(evalResult);
   }
 
   @override
@@ -422,19 +451,19 @@ class $int extends $num<int> {
   static $Value? _toRadixString(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final radix = args[0];
-    final _evalResult = (target!.$value as int).toRadixString(radix!.$value);
+    final evalResult = (target!.$value as int).toRadixString(radix!.$value);
 
-    return $String(_evalResult);
+    return $String(evalResult);
   }
 
   static const $Function __bitwiseOr = $Function(_bitwiseOr);
   static $Value? _bitwiseOr(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value | other!.$value;
+    final evalResult = target!.$value | other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
     throw UnimplementedError();
@@ -444,10 +473,10 @@ class $int extends $num<int> {
   static $Value? _bitwiseAnd(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value & other!.$value;
+    final evalResult = target!.$value & other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
     throw UnimplementedError();
@@ -457,10 +486,10 @@ class $int extends $num<int> {
   static $Value? _shiftLeft(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value << other!.$value;
+    final evalResult = target!.$value << other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
     throw UnimplementedError();
@@ -470,10 +499,10 @@ class $int extends $num<int> {
   static $Value? _shiftRight(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value >> other!.$value;
+    final evalResult = target!.$value >> other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
     throw UnimplementedError();
@@ -484,10 +513,10 @@ class $int extends $num<int> {
   static $Value? _bitwiseXor(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value ^ other!.$value;
+    final evalResult = target!.$value ^ other!.$value;
 
-    if (_evalResult is int) {
-      return $int(_evalResult);
+    if (evalResult is int) {
+      return $int(evalResult);
     }
 
     throw UnimplementedError();
@@ -497,9 +526,9 @@ class $int extends $num<int> {
   static $Value? _truncatediv(
       Runtime runtime, $Value? target, List<$Value?> args) {
     final other = args[0];
-    final _evalResult = target!.$value ~/ other!.$value;
+    final evalResult = target!.$value ~/ other!.$value;
 
-    return $int(_evalResult);
+    return $int(evalResult);
   }
 }
 
@@ -542,10 +571,40 @@ class $double extends $num<double> {
                 namedParams: []),
             isStatic: true),
       },
-      getters: {},
+      getters: {
+        'nan': BridgeMethodDef(
+            BridgeFunctionDef(
+                returns: BridgeTypeAnnotation(BridgeTypeRef(CoreTypes.double)),
+                params: []),
+            isStatic: true),
+        'infinity': BridgeMethodDef(
+            BridgeFunctionDef(
+                returns: BridgeTypeAnnotation(BridgeTypeRef(CoreTypes.double)),
+                params: []),
+            isStatic: true),
+        'negativeInfinity': BridgeMethodDef(
+            BridgeFunctionDef(
+                returns: BridgeTypeAnnotation(BridgeTypeRef(CoreTypes.double)),
+                params: []),
+            isStatic: true),
+      },
       setters: {},
       fields: {},
       wrap: true);
+
+  static $Value? $nan(Runtime runtime, $Value? target, List<$Value?> args) {
+    return $double(double.nan);
+  }
+
+  static $Value? $infinity(
+      Runtime runtime, $Value? target, List<$Value?> args) {
+    return $double(double.infinity);
+  }
+
+  static $Value? $negativeInfinity(
+      Runtime runtime, $Value? target, List<$Value?> args) {
+    return $double(double.negativeInfinity);
+  }
 
   @override
   double get $reified => $value;

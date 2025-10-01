@@ -29,13 +29,13 @@ class CompileError implements Exception {
   }
 
   String _toStringWithContext(CompilerContext ctx) {
-    String? _library;
+    String? library;
     for (final entry in ctx.libraryMap.entries) {
       if (entry.value == (library ?? ctx.library)) {
-        _library = entry.key;
+        library = entry.key;
       }
     }
-    return '${_toString()} (file $_library)';
+    return '${_toString()} (file $library)';
   }
 }
 
@@ -49,7 +49,11 @@ class NotReferencableError extends CompileError {
 }
 
 class PrefixError extends CompileError {
-  const PrefixError() : super("Prefix");
+  const PrefixError({
+    AstNode? node,
+    int? library,
+    CompilerContext? context,
+  }) : super("[internal] unexpected prefix", node, library, context);
 
   @override
   String toString() {

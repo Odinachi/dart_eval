@@ -17,8 +17,12 @@ Reference compileIdentifierAsReference(Identifier id, CompilerContext ctx) {
   if (id is SimpleIdentifier) {
     return IdentifierReference(null, id.name);
   } else if (id is PrefixedIdentifier) {
-    final L = compileIdentifier(id.prefix, ctx);
-    return IdentifierReference(L, id.identifier.name);
+    try {
+      final L = compileIdentifier(id.prefix, ctx);
+      return IdentifierReference(L, id.identifier.name);
+    } on PrefixError {
+      return IdentifierReference(null, '${id.prefix}.${id.identifier.name}');
+    }
   }
   throw CompileError('Unknown identifier ${id.runtimeType}');
 }
@@ -42,10 +46,10 @@ Pair<TypeRef, DeclarationOrBridge>? resolveInstanceDeclaration(
     return Pair($type, DeclarationOrBridge(-1, declaration: dec));
   }
 
-  final _$classDec = ctx.topLevelDeclarationsMap[library]![$class]!;
+  final $classDec = ctx.topLevelDeclarationsMap[library]![$class]!;
 
-  if (_$classDec.isBridge) {
-    final bridge = _$classDec.bridge as BridgeClassDef;
+  if ($classDec.isBridge) {
+    final bridge = $classDec.bridge as BridgeClassDef;
     final method = bridge.methods[name];
     if (method != null) {
       final $type = ctx.visibleTypes[library]![$class]!;
@@ -56,11 +60,11 @@ Pair<TypeRef, DeclarationOrBridge>? resolveInstanceDeclaration(
 
     if (getter != null || setter != null) {
       final $type = ctx.visibleTypes[library]![$class]!;
-      final _setter = setter == null
+      final setter0 = setter == null
           ? null
           : DeclarationOrBridge<MethodDeclaration, BridgeMethodDef>(-1,
               bridge: setter);
-      return Pair($type, GetSet(-1, bridge: getter, setter: _setter));
+      return Pair($type, GetSet(-1, bridge: getter, setter: setter0));
     }
 
     final field = bridge.fields[name];
@@ -71,11 +75,11 @@ Pair<TypeRef, DeclarationOrBridge>? resolveInstanceDeclaration(
 
     final $extends = bridge.type.$extends;
     if ($extends != null) {
-      final _type = TypeRef.fromBridgeTypeRef(ctx, $extends);
-      if (_type.file < 0) {
+      final type = TypeRef.fromBridgeTypeRef(ctx, $extends);
+      if (type.file < 0) {
         return null;
       }
-      return resolveInstanceDeclaration(ctx, _type.file, _type.name, name);
+      return resolveInstanceDeclaration(ctx, type.file, type.name, name);
     }
 
     return null;
@@ -93,11 +97,11 @@ Pair<TypeRef, DeclarationOrBridge>? resolveInstanceDeclaration(
       return Pair($type, getset);
     }
   }
-  final _$dec = _$classDec.declaration!;
-  final $withClause = _$dec is ClassDeclaration
-      ? _$dec.withClause
-      : (_$dec is EnumDeclaration ? _$dec.withClause : null);
-  final $extendsClause = _$dec is ClassDeclaration ? _$dec.extendsClause : null;
+  final $dec = $classDec.declaration!;
+  final $withClause = $dec is ClassDeclaration
+      ? $dec.withClause
+      : ($dec is EnumDeclaration ? $dec.withClause : null);
+  final $extendsClause = $dec is ClassDeclaration ? $dec.extendsClause : null;
   if ($withClause != null) {
     for (final $mixin in $withClause.mixinTypes) {
       final mixinType = ctx.visibleTypes[library]![$mixin.name2.stringValue!]!;
@@ -109,9 +113,10 @@ Pair<TypeRef, DeclarationOrBridge>? resolveInstanceDeclaration(
     }
   }
   if ($extendsClause != null) {
+    final prefix = $extendsClause.superclass.importPrefix;
     final extendsType = ctx.visibleTypes[library]![
-        $extendsClause.superclass.name2.stringValue ??
-            $extendsClause.superclass.name2.value()]!;
+        '${prefix != null ? '${prefix.name.value()}.' : ''}'
+            '${$extendsClause.superclass.name2.value()}']!;
     return resolveInstanceDeclaration(
         ctx, extendsType.file, extendsType.name, name);
   } else {

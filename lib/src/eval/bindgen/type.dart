@@ -1,4 +1,4 @@
-import 'package:analyzer/dart/element/element.dart';
+import 'package:analyzer/dart/element/element2.dart';
 import 'package:analyzer/dart/element/nullability_suffix.dart';
 import 'package:analyzer/dart/element/type.dart';
 import 'package:change_case/change_case.dart';
@@ -6,20 +6,26 @@ import 'package:collection/collection.dart';
 import 'package:dart_eval/src/eval/bindgen/context.dart';
 import 'package:dart_eval/src/eval/bindgen/errors.dart';
 import 'package:dart_eval/src/eval/bindgen/parameters.dart';
+import 'package:path/path.dart' as path;
 
 String bridgeTypeRefFromType(BindgenContext ctx, DartType type) {
   if (type is TypeParameterType) {
-    return 'BridgeTypeRef.ref(\'${type.element.name}\')';
+    return 'BridgeTypeRef.ref(\'${type.element3.name3}\')';
   } else if (type is FunctionType) {
     return '''BridgeTypeRef.genericFunction(BridgeFunctionDef(
       returns: ${bridgeTypeAnnotationFrom(ctx, type.returnType)},
       params: [
-        ${parameters(ctx, type.parameters.where((p) => p.isPositional).toList())}
+        ${parameters(ctx, type.formalParameters.where((p) => p.isPositional).toList())}
       ],
       namedParams: [
-        ${parameters(ctx, type.parameters.where((p) => p.isNamed).toList())}
+        ${parameters(ctx, type.formalParameters.where((p) => p.isNamed).toList())}
       ],
     ))''';
+  } else if (type is ParameterizedType) {
+    final typeArgs = type.typeArguments
+        .map((e) => bridgeTypeAnnotationFrom(ctx, e))
+        .join(', ');
+    return 'BridgeTypeRef(${bridgeTypeSpecFrom(ctx, type)}, [$typeArgs])';
   }
   return 'BridgeTypeRef(${bridgeTypeSpecFrom(ctx, type)})';
 }
@@ -36,10 +42,10 @@ String bridgeTypeSpecFrom(BindgenContext ctx, DartType type) {
   if (builtin != null) {
     return builtin;
   }
-  final element = type.element!;
-  final lib = element.library!;
-  final uri = ctx.libOverrides[element.name] ?? lib.source.uri.toString();
-  return 'BridgeTypeSpec(\'${uri}\', \'${element.name!.replaceAll(r'$', r'\$')}\')';
+  final element = type.element3!;
+  final lib = element.library2!;
+  final uri = ctx.libOverrides[element.name3] ?? lib.uri.toString();
+  return 'BridgeTypeSpec(\'$uri\', \'${element.name3!.replaceAll(r'$', r'\$')}\')';
 }
 
 String? builtinTypeFrom(DartType type) {
@@ -58,17 +64,20 @@ String? builtinTypeFrom(DartType type) {
   if (type is FunctionType) {
     return 'CoreTypes.function';
   }
+  if (type is RecordType) {
+    return 'CoreTypes.record';
+  }
 
-  final element = type.element!;
-  final lib = element.library!;
-  final name = element.name ?? ' ';
+  final element = type.element3!;
+  final lib = element.library2!;
+  final name = element.name3 ?? ' ';
   final lowerCamelCaseName = name.toCamelCase();
 
   if (!lib.isInSdk) {
     return null;
   }
 
-  final uri = lib.source.uri.toString();
+  final uri = lib.uri.toString();
 
   if (uri == 'dart:async') {
     if (name == 'Future' || name == 'Stream') {
@@ -100,31 +109,35 @@ String? builtinTypeFrom(DartType type) {
 String? wrapVar(BindgenContext ctx, DartType type, String expr,
     {bool func = false,
     bool wrapList = false,
-    List<ElementAnnotation>? metadata}) {
+    List<ElementAnnotation>? metadata,
+    bool forCollection = false}) {
   if (type is VoidType) {
     if (func) {
-      return '\$null()';
+      return 'const \$null()';
     }
     return 'null';
   }
 
   if (type.isDartCoreNull) {
-    return '\$null()';
+    return 'const \$null()';
   }
 
   var wrapped =
       wrapType(ctx, type, expr, metadata: metadata, wrapList: wrapList);
 
   if (wrapped == null) {
-    if (ctx.unknownTypes.add(type.element!.name!)) {
-      print('Warning: type ${type.element!.name} is not bound, '
+    if (ctx.unknownTypes.add(type.element3!.name3!)) {
+      print('Warning: type ${type.element3!.name3} is not bound, '
           'falling back to wrapAlways()');
     }
     wrapped = 'runtime.wrapAlways($expr)';
   }
 
   if (type.nullabilitySuffix == NullabilitySuffix.question) {
-    return '$expr == null ? \$null() : $wrapped';
+    if (forCollection) {
+      return 'if ($expr == null) const \$null() else $wrapped';
+    }
+    return '$expr == null ? const \$null() : $wrapped';
   }
 
   return wrapped;
@@ -133,22 +146,21 @@ String? wrapVar(BindgenContext ctx, DartType type, String expr,
 String? wrapType(BindgenContext ctx, DartType type, String expr,
     {bool wrapList = false, List<ElementAnnotation>? metadata}) {
   final union =
-      metadata?.firstWhereOrNull((e) => e.element?.displayName == 'UnionOf');
+      metadata?.firstWhereOrNull((e) => e.element2?.displayName == 'UnionOf');
   String unionStr = '';
   if (union != null) {
     final types =
         union.computeConstantValue()?.getField('types')?.toListValue();
     if (types != null && types.isNotEmpty) {
       for (final type in types) {
-        final _type = type.toTypeValue();
-        if (_type == null) {
+        final type0 = type.toTypeValue();
+        if (type0 == null) {
           continue;
         }
-        ctx.imports.add(_type.element!.library!.source.uri.toString());
-        final wrapper = wrapVar(ctx, _type, expr);
+        ctx.imports.add(type0.element3!.library2!.uri.toString());
+        final wrapper = wrapVar(ctx, type0, expr);
 
-        unionStr +=
-            '$expr is ${_type.getDisplayString(withNullability: false)} ? $wrapper : ';
+        unionStr += '$expr is ${type0.element3!.name3} ? $wrapper : ';
       }
     }
   }
@@ -157,11 +169,11 @@ String? wrapType(BindgenContext ctx, DartType type, String expr,
   }
 
   if (type.isDartCoreNull) {
-    return '${unionStr}\$null()';
+    return '${unionStr}const \$null()';
   }
 
   if (type is DynamicType) {
-    return '${unionStr}\$Object($expr)';
+    return '$unionStr\$Object($expr)';
   }
 
   if (type is FunctionType) {
@@ -169,50 +181,72 @@ String? wrapType(BindgenContext ctx, DartType type, String expr,
   }
 
   if (type.isDartCoreFunction) {
-    return '${unionStr}\$Function((runtime, target, args) => $expr())';
+    return '$unionStr\$Function((runtime, target, args) => $expr())';
   }
 
-  final element = type.element ??
+  final element = type.element3 ??
       (throw BindingGenerationError('Type $type has no element'));
-  final lib = element.library!;
-  final name = element.name ?? ' ';
+  final lib = element.library2!;
+  final name = element.name3 ?? ' ';
 
   final defaultCstr = {'int', 'num', 'double', 'bool', 'String', 'Object'};
 
   if (lib.isInSdk) {
-    final dartUri = lib.source.uri.toString();
+    final dartUri = lib.uri.toString();
     final which = dartUri.substring(5);
     ctx.imports.add('package:dart_eval/stdlib/$which.dart');
     if (defaultCstr.contains(name)) {
-      return '${unionStr}\$$name($expr)';
+      return '$unionStr\$$name($expr)';
     }
     if (name == 'List') {
       if (wrapList) {
-        return '${unionStr}\$List.wrap($expr)';
+        return '$unionStr\$List.wrap($expr)';
       }
       final generic = type as ParameterizedType;
       final arg = generic.typeArguments.first;
-      return '${unionStr}\$List.view($expr, (e) => ${wrapVar(ctx, arg, 'e')})';
+      return '$unionStr\$List.view($expr, (e) => ${wrapVar(ctx, arg, 'e')})';
     }
     if (name == 'Stream') {
       final generic = type as ParameterizedType;
       final arg = generic.typeArguments.first;
-      return '${unionStr}\$Stream.wrap($expr.map((e) => ${wrapVar(ctx, arg, 'e')}))';
+      return '$unionStr\$Stream.wrap($expr.map((e) => ${wrapVar(ctx, arg, 'e')}))';
     }
     if (name == 'Future') {
       final generic = type as ParameterizedType;
       final arg = generic.typeArguments.first;
-      return '${unionStr}\$Future.wrap($expr.then((e) => ${wrapVar(ctx, arg, 'e')}))';
+      return '$unionStr\$Future.wrap($expr.then((e) => ${wrapVar(ctx, arg, 'e')}))';
     }
-    return '${unionStr}\$$name.wrap($expr)';
+    return '$unionStr\$$name.wrap($expr)';
   }
 
-  final typeEl = type.element;
-  if (typeEl is ClassElement &&
-      typeEl.metadata.any((e) => e.element?.displayName == 'Bind')) {
-    ctx.imports.add(
-        typeEl.library.source.uri.toString().replaceAll('.dart', '.eval.dart'));
-    return '${unionStr}\$$name.wrap($expr)';
+  final typeEl = type.element3!;
+  if (typeEl is InterfaceElement2) {
+    final uri = typeEl.library2.uri.toString();
+    final hasAnno = typeEl.metadata2.annotations
+        .any((e) => e.element2?.displayName == 'Bind');
+    if (hasAnno) {
+      ctx.imports.add(uri.replaceAll('.dart', '.eval.dart'));
+      return '$unionStr\$$name.wrap($expr)';
+    } else if (ctx.bridgeDeclarations.containsKey(uri)) {
+      final parsedUri = Uri.parse(uri);
+
+      String current = parsedUri.path;
+      String? mappedUri;
+      // walk up the path until we find a match in ctx.exportedLibMappings
+      while (current != path.dirname(current)) {
+        if (ctx.exportedLibMappings
+            .containsKey('${parsedUri.scheme}:$current')) {
+          mappedUri = ctx.exportedLibMappings['${parsedUri.scheme}:$current']!;
+          break;
+        }
+        current = path.dirname(current);
+      }
+
+      if (mappedUri != null) {
+        ctx.imports.add(mappedUri);
+        return '$unionStr\$$name.wrap($expr)';
+      }
+    }
   }
 
   if (type is TypeParameterType) {
@@ -220,7 +254,7 @@ String? wrapType(BindgenContext ctx, DartType type, String expr,
     if (bound is! DynamicType) {
       final b = wrapVar(ctx, bound, expr);
       if (b != null) {
-        return '${unionStr}\$$b';
+        return '$unionStr\$$b';
       }
     }
   }
@@ -237,8 +271,8 @@ String wrapFunctionType(BindgenContext ctx, FunctionType type, String expr) {
   var i = 0;
   for (; i < type.normalParameterTypes.length; i++) {
     buffer.write('args[$i]');
-    final _type = type.normalParameterTypes[i];
-    if (_type.nullabilitySuffix == NullabilitySuffix.question) {
+    final type0 = type.normalParameterTypes[i];
+    if (type0.nullabilitySuffix == NullabilitySuffix.question) {
       buffer.write('?.\$value');
     } else {
       buffer.write('!.\$value');
@@ -248,19 +282,19 @@ String wrapFunctionType(BindgenContext ctx, FunctionType type, String expr) {
     }
   }
 
-  if (type.optionalParameterNames.isNotEmpty) {
-    for (var j = i; j < type.optionalParameterNames.length + i; j++) {
+  if (type.optionalParameterTypes.isNotEmpty) {
+    for (var j = i; j < type.optionalParameterTypes.length + i; j++) {
       if (type.normalParameterTypes.isNotEmpty) {
         buffer.write(', ');
       }
-      final _type = type.optionalParameterTypes[i];
+      final type0 = type.optionalParameterTypes[i];
       buffer.write('args[$j]');
-      if (_type.nullabilitySuffix == NullabilitySuffix.question) {
+      if (type0.nullabilitySuffix == NullabilitySuffix.question) {
         buffer.write('?.\$value');
       } else {
         buffer.write('!.\$value');
       }
-      if (j < type.optionalParameterNames.length + i - 1) {
+      if (j < type.optionalParameterTypes.length + i - 1) {
         buffer.write(', ');
       }
     }
@@ -268,15 +302,15 @@ String wrapFunctionType(BindgenContext ctx, FunctionType type, String expr) {
 
   if (type.namedParameterTypes.isNotEmpty) {
     if (type.normalParameterTypes.isNotEmpty ||
-        type.optionalParameterNames.isNotEmpty) {
+        type.optionalParameterTypes.isNotEmpty) {
       buffer.write(', ');
     }
 
     var k = i;
-    type.namedParameterTypes.forEach((_name, _type) {
-      buffer.write(_name);
+    type.namedParameterTypes.forEach((npName, npType) {
+      buffer.write(npName);
       buffer.write(': args[$k]');
-      if (_type.nullabilitySuffix == NullabilitySuffix.question) {
+      if (type.nullabilitySuffix == NullabilitySuffix.question) {
         buffer.write('?.\$value');
       } else {
         buffer.write('!.\$value');

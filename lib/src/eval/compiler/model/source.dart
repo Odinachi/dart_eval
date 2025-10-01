@@ -2,18 +2,20 @@ import 'dart:io';
 
 import 'package:analyzer/dart/analysis/utilities.dart';
 import 'package:analyzer/dart/ast/ast.dart';
+import 'package:analyzer/diagnostic/diagnostic.dart';
 import 'package:dart_eval/src/eval/compiler/errors.dart';
 import 'package:dart_eval/src/eval/compiler/model/compilation_unit.dart';
+import 'package:dart_eval/src/eval/compiler/model/diagnostic_mode.dart';
 
 /// A unit of Dart source code, from a file or String.
 class DartSource {
-  DartSource(String _uri, String source)
-      : uri = Uri.parse(_uri),
+  DartSource(String uri, String source)
+      : uri = Uri.parse(uri),
         stringSource = source,
         fileSource = null;
 
-  DartSource.file(String _uri, File file)
-      : uri = Uri.parse(_uri),
+  DartSource.file(String uri, File file)
+      : uri = Uri.parse(uri),
         fileSource = file,
         stringSource = null;
 
@@ -24,7 +26,7 @@ class DartSource {
 
   /// Load the source code from the filesystem or a String and parse it
   /// (internally using [parseString] from the Dart analyzer) into an AST
-  DartCompilationUnit load() {
+  DartCompilationUnit load(DiagnosticMode diagnosticMode) {
     LibraryDirective? libraryDirective;
     PartOfDirective? partOfDirective;
 
@@ -32,7 +34,7 @@ class DartSource {
     final exports = <ExportDirective>[];
     final parts = <PartDirective>[];
 
-    final unit = _parse(toString());
+    final unit = _parse(toString(), diagnosticMode);
     for (final directive in unit.directives) {
       if (directive is ImportDirective) {
         imports.add(directive);
@@ -94,20 +96,50 @@ class DartSource {
 
   @override
   String toString() {
-    final String _source;
+    final String source;
     if (stringSource != null) {
-      _source = stringSource!;
+      source = stringSource!;
     } else {
-      _source = fileSource!.readAsStringSync();
+      source = fileSource!.readAsStringSync();
     }
-    return _source;
+    return source;
   }
 }
 
-CompilationUnit _parse(String source) {
+CompilationUnit _parse(String source, DiagnosticMode diagnosticMode) {
   final d = parseString(content: source, throwIfDiagnostics: false);
   if (d.errors.isNotEmpty) {
-    throw CompileError('Parsing error(s): ${d.errors}');
+    for (final error in d.errors) {
+      if (error.severity == Severity.error &&
+          (diagnosticMode == DiagnosticMode.throwIfError ||
+              diagnosticMode == DiagnosticMode.throwIfErrorOrWarning ||
+              diagnosticMode == DiagnosticMode.throwErrorPrintWarnings ||
+              diagnosticMode == DiagnosticMode.throwErrorPrintAll)) {
+        throw CompileError('Parsing error: ${error.message}');
+      }
+      if (error.severity == Severity.warning &&
+          diagnosticMode == DiagnosticMode.throwIfErrorOrWarning) {
+        throw CompileError('Parsing warning: ${error.message}');
+      }
+      if (error.severity == Severity.error &&
+          diagnosticMode != DiagnosticMode.ignore) {
+        print('Parsing error: ${error.message}');
+      }
+      if (error.severity == Severity.warning &&
+          (diagnosticMode == DiagnosticMode.printAll ||
+              diagnosticMode == DiagnosticMode.printErrorsAndWarnings ||
+              diagnosticMode == DiagnosticMode.throwErrorPrintWarnings ||
+              diagnosticMode == DiagnosticMode.throwErrorPrintAll)) {
+        print('Parsing warning: ${error.message}');
+      }
+      if (error.severity == Severity.info &&
+          (diagnosticMode == DiagnosticMode.printAll ||
+              diagnosticMode == DiagnosticMode.printErrorsAndWarnings ||
+              diagnosticMode == DiagnosticMode.throwErrorPrintWarnings ||
+              diagnosticMode == DiagnosticMode.throwErrorPrintAll)) {
+        print('Parsing info: ${error.message}');
+      }
+    }
   }
   return d.unit;
 }

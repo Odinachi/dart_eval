@@ -3,6 +3,7 @@ import 'package:analyzer/dart/ast/token.dart';
 import 'package:dart_eval/src/eval/compiler/builtins.dart';
 import 'package:dart_eval/src/eval/compiler/context.dart';
 import 'package:dart_eval/src/eval/compiler/expression/expression.dart';
+import 'package:dart_eval/src/eval/compiler/helpers/invoke.dart';
 import 'package:dart_eval/src/eval/compiler/macros/branch.dart';
 import 'package:dart_eval/src/eval/compiler/statement/statement.dart';
 import 'package:dart_eval/src/eval/compiler/variable.dart';
@@ -20,11 +21,11 @@ Variable compileAssignmentExpression(
   } else if (e.operator.type.binaryOperatorOfCompoundAssignment ==
       TokenType.QUESTION_QUESTION) {
     late Variable result;
-    macroBranch(ctx, null, condition: (_ctx) {
+    macroBranch(ctx, null, condition: (ctx) {
       return L
-          .getValue(_ctx)
-          .invoke(ctx, '==', [BuiltinValue().push(_ctx)]).result;
-    }, thenBranch: (_ctx, rt) {
+          .getValue(ctx)
+          .invoke(ctx, '==', [BuiltinValue().push(ctx)]).result;
+    }, thenBranch: (ctx, rt) {
       result = L.setValue(ctx, R.boxIfNeeded(ctx));
       return StatementInfo(-1);
     });

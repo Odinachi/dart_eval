@@ -14,16 +14,15 @@ Variable compileSetOrMapLiteral(SetOrMapLiteral l, CompilerContext ctx) {
   TypeRef? specifiedKeyType, specifiedValueType;
   final typeArgs = l.typeArguments;
   if (typeArgs != null) {
-    if (typeArgs.length == 1) {
-      throw CompileError('Sets are not currently supported');
-    }
     specifiedKeyType =
         TypeRef.fromAnnotation(ctx, ctx.library, typeArgs.arguments[0]);
-    specifiedValueType =
-        TypeRef.fromAnnotation(ctx, ctx.library, typeArgs.arguments[1]);
+    if (typeArgs.arguments.length > 1) {
+      specifiedValueType =
+          TypeRef.fromAnnotation(ctx, ctx.library, typeArgs.arguments[1]);
+    }
   }
 
-  Variable? _collection;
+  Variable? collection;
 
   final elements = l.elements;
 
@@ -31,43 +30,68 @@ Variable compileSetOrMapLiteral(SetOrMapLiteral l, CompilerContext ctx) {
   final keyResultTypes = <TypeRef>[];
   final valueResultTypes = <TypeRef>[];
   for (final e in elements) {
-    final _result = compileSetOrMapElement(e, _collection, ctx,
-        specifiedKeyType, specifiedValueType, _boxSetOrMapElements);
-    _collection = _result.first;
-    keyResultTypes.addAll(_result.second.map((e) => e.first));
-    valueResultTypes.addAll(_result.second.map((e) => e.second));
+    final result = compileSetOrMapElement(e, collection, ctx, specifiedKeyType,
+        specifiedValueType, _boxSetOrMapElements);
+    collection = result.first;
+    keyResultTypes.addAll(result.second.map((e) => e.first));
+    valueResultTypes.addAll(result.second.map((e) => e.second));
   }
+
+  if (specifiedKeyType == null && keyResultTypes.isNotEmpty) {
+    specifiedKeyType = TypeRef.commonBaseType(ctx, keyResultTypes.toSet());
+  }
+  if (specifiedValueType == null && valueResultTypes.isNotEmpty) {
+    specifiedValueType = TypeRef.commonBaseType(ctx, valueResultTypes.toSet());
+  }
+
+  final collectionKeyType = (_boxSetOrMapElements
+          ? specifiedKeyType?.copyWith(boxed: true)
+          : specifiedKeyType) ??
+      CoreTypes.dynamic.ref(ctx);
+
+  final collectionValueType = (_boxSetOrMapElements
+          ? specifiedValueType?.copyWith(boxed: true)
+          : specifiedValueType) ??
+      CoreTypes.dynamic.ref(ctx);
+
   var isEmpty = false;
-  if (_collection == null) {
+  if (collection == null) {
     isEmpty = true;
     if (specifiedValueType != null ||
         (specifiedKeyType == null && specifiedValueType == null)) {
       // make an empty Map
       ctx.pushOp(PushMap.make(), PushMap.LEN);
-      _collection = Variable.alloc(
+      collection = Variable.alloc(
           ctx,
           CoreTypes.map.ref(ctx).copyWith(specifiedTypeArgs: [
-            specifiedKeyType ?? CoreTypes.dynamic.ref(ctx),
-            specifiedValueType ?? CoreTypes.dynamic.ref(ctx),
+            collectionKeyType,
+            collectionValueType,
           ], boxed: false));
     } else {
-      throw CompileError('Sets are not currently supported');
+      // make an empty Set
+      ctx.pushOp(PushSet.make(), PushSet.LEN);
+      collection = Variable.alloc(
+          ctx,
+          CoreTypes.set.ref(ctx).copyWith(specifiedTypeArgs: [
+            collectionKeyType,
+          ], boxed: false));
     }
   }
+
   ctx.endAllocScope(popAdjust: -1);
   ctx.scopeFrameOffset++;
   ctx.allocNest.last++;
 
   if (specifiedValueType == null && !isEmpty) {
     return Variable(
-        _collection.scopeFrameOffset,
-        _collection.type.copyWith(boxed: false, specifiedTypeArgs: [
+        collection.scopeFrameOffset,
+        collection.type.copyWith(boxed: false, specifiedTypeArgs: [
           TypeRef.commonBaseType(ctx, keyResultTypes.toSet()),
           TypeRef.commonBaseType(ctx, valueResultTypes.toSet())
         ]));
   }
 
-  return _collection;
+  return collection;
 }
 
 Pair<Variable, List<Pair<TypeRef, TypeRef>>> compileSetOrMapElement(
@@ -78,7 +102,31 @@ Pair<Variable, List<Pair<TypeRef, TypeRef>>> compileSetOrMapElement(
     TypeRef? specifiedValueType,
     bool box) {
   if (e is Expression) {
-    throw CompileError('Sets are not currently supported');
+    if (setOrMap == null) {
+      ctx.pushOp(PushSet.make(), PushSet.LEN);
+      setOrMap = Variable.alloc(
+          ctx,
+          CoreTypes.set.ref(ctx).copyWith(specifiedTypeArgs: [
+            specifiedKeyType ?? CoreTypes.dynamic.ref(ctx),
+          ], boxed: false));
+    }
+
+    var value = compileExpression(e, ctx, specifiedKeyType);
+
+    if (specifiedKeyType != null &&
+        !value.type.isAssignableTo(ctx, specifiedKeyType)) {
+      throw CompileError(
+          'Cannot use value of type ${value.type} in set of type <$specifiedKeyType>');
+    }
+
+    if (box) {
+      value = value.boxIfNeeded(ctx);
+    }
+
+    ctx.pushOp(SetAdd.make(setOrMap.scopeFrameOffset, value.scopeFrameOffset),
+        SetAdd.LEN);
+
+    return Pair(setOrMap, [Pair(value.type, CoreTypes.nullType.ref(ctx))]);
   } else if (e is MapLiteralEntry) {
     if (setOrMap == null) {
       ctx.pushOp(PushMap.make(), PushMap.LEN);
@@ -90,33 +138,33 @@ Pair<Variable, List<Pair<TypeRef, TypeRef>>> compileSetOrMapElement(
           ], boxed: false));
     }
 
-    var _key = compileExpression(e.key, ctx);
+    var key = compileExpression(e.key, ctx, specifiedKeyType);
 
     if (specifiedKeyType != null &&
-        !_key.type.isAssignableTo(ctx, specifiedKeyType)) {
+        !key.type.isAssignableTo(ctx, specifiedKeyType)) {
       throw CompileError(
-          'Cannot use key of type ${_key.type} in map of type <$specifiedKeyType, $specifiedValueType>');
+          'Cannot use key of type ${key.type} in map of type <$specifiedKeyType, $specifiedValueType>');
     }
 
-    var _value = compileExpression(e.value, ctx);
+    var value = compileExpression(e.value, ctx, specifiedValueType);
 
     if (specifiedValueType != null &&
-        !_value.type.isAssignableTo(ctx, specifiedValueType)) {
+        !value.type.isAssignableTo(ctx, specifiedValueType)) {
       throw CompileError(
-          'Cannot use value of type ${_value.type} in map of type <$specifiedKeyType, $specifiedValueType>');
+          'Cannot use value of type ${value.type} in map of type <$specifiedKeyType, $specifiedValueType>');
     }
 
     if (box) {
-      _key = _key.boxIfNeeded(ctx);
-      _value = _value.boxIfNeeded(ctx);
+      key = key.boxIfNeeded(ctx);
+      value = value.boxIfNeeded(ctx);
     }
 
     ctx.pushOp(
-        MapSet.make(setOrMap.scopeFrameOffset, _key.scopeFrameOffset,
-            _value.scopeFrameOffset),
+        MapSet.make(setOrMap.scopeFrameOffset, key.scopeFrameOffset,
+            value.scopeFrameOffset),
         MapSet.LEN);
 
-    return Pair(setOrMap, [Pair(_key.type, _value.type)]);
+    return Pair(setOrMap, [Pair(key.type, value.type)]);
   }
 
   throw CompileError('Unknown set or map collection element ${e.runtimeType}');

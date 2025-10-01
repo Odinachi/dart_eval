@@ -12,7 +12,9 @@ import 'package:dart_eval/src/eval/shared/stdlib/core/iterator.dart';
 import 'package:dart_eval/src/eval/shared/stdlib/core/num.dart';
 import 'package:dart_eval/src/eval/shared/stdlib/core/object.dart';
 import 'package:dart_eval/src/eval/shared/stdlib/core/pattern.dart';
+import 'package:dart_eval/src/eval/shared/stdlib/core/record.dart';
 import 'package:dart_eval/src/eval/shared/stdlib/core/regexp.dart';
+import 'package:dart_eval/src/eval/shared/stdlib/core/sink.dart';
 import 'package:dart_eval/src/eval/shared/stdlib/core/stack_trace.dart';
 import 'package:dart_eval/src/eval/shared/stdlib/core/string_buffer.dart';
 import 'package:dart_eval/src/eval/shared/stdlib/core/symbol.dart';
@@ -34,6 +36,7 @@ class DartCorePlugin implements EvalPlugin {
     registry.defineBridgeClass($dynamicCls);
     registry.defineBridgeClass($voidCls);
     registry.defineBridgeClass($neverCls);
+    registry.defineBridgeClass($recordCls);
     registry.defineBridgeClass($Type.$declaration);
     registry.defineBridgeClass($null.$declaration);
     registry.defineBridgeClass($Object.$declaration);
@@ -67,6 +70,8 @@ class DartCorePlugin implements EvalPlugin {
     registry.defineBridgeClass($FormatException.$declaration);
     registry.defineBridgeClass($ArgumentError.$declaration);
     registry.defineBridgeClass($StateError.$declaration);
+    registry.defineBridgeClass($Set.$declaration);
+    registry.defineBridgeClass($Sink.$declaration);
     $StackTrace.configureForCompile(registry);
     $Error.configureForCompile(registry);
     $UnimplementedError.configureForCompile(registry);
@@ -85,6 +90,8 @@ class DartCorePlugin implements EvalPlugin {
     $Future.configureForRuntime(runtime);
     $DateTime.configureForRuntime(runtime);
     $Uri.configureForRuntime(runtime);
+    $Map.configureForRuntime(runtime);
+    $Set.configureForRuntime(runtime);
     runtime.registerBridgeFunc('dart:core', 'RegExp.', $RegExp.$new);
     runtime.registerBridgeFunc(
         'dart:core', 'AssertionError.', $AssertionError.$new);
@@ -107,6 +114,11 @@ class DartCorePlugin implements EvalPlugin {
     runtime.registerBridgeFunc('dart:core', 'RangeError.checkNotNegative',
         $RangeError.$checkNotNegative);
     runtime.registerBridgeFunc('dart:core', 'Symbol.', $Symbol.$new);
+    runtime.registerBridgeFunc('dart:core', 'double.nan*g', $double.$nan);
+    runtime.registerBridgeFunc(
+        'dart:core', 'double.infinity*g', $double.$infinity);
+    runtime.registerBridgeFunc(
+        'dart:core', 'double.negativeInfinity*g', $double.$negativeInfinity);
     $StackTrace.configureForRuntime(runtime);
     $Error.configureForRuntime(runtime);
     $UnimplementedError.configureForRuntime(runtime);
